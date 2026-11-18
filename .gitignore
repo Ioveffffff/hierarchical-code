@@ -1,0 +1,30 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python and editor artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.idea/
+.vscode/
+
+# Training outputs, checkpoints, and API caches
+outputs/
+**/outputs/
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.npz
+*.jsonl
+name_embedding_cache/
+**/name_embedding_cache/
+
+# Keep only the explicitly approved smoke-test dataset.
+datasets/*
+!datasets/test.csv
