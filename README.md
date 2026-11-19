@@ -20,9 +20,7 @@ after training to report evaluation metrics.
 
 `run_full_baseline.py` orchestrates BSE, CGCL, and HCRL for the full dataset. It
 expects the dataset, the L1 category catalog, a local RoBERTa checkpoint, the
-LLM API credential, and the experiment scripts under
-`伪标签可靠性与跨粒度目标分析/初始化敏感性R1-1` to be supplied separately. That script
-directory is not included in this repository.
+LLM API credential, and supporting experiment scripts to be supplied for a run.
 
 Before running HCRL on a dataset, fill the `PROMPT_*` dataset-specific values in
 `utils/hierarchical_knowledge_builder.py` and provide the Leiden settings via
