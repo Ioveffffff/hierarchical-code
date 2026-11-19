@@ -7,7 +7,7 @@ from utils.transformer import TransformerEncoderLayer
 
 class EnhancedEntityEmbedding(nn.Module):
     """
-    双通道可训练版本
+    双通道实体表示模型
 
     通道1: Char CNN(完全可训练)
     通道2: BERT/RoBERTa(可微调，支持冻结前N层)
@@ -49,9 +49,7 @@ class EnhancedEntityEmbedding(nn.Module):
         self.instance_dim = instance_dim
         self.max_seq_length = max_seq_length
 
-        # ============================================================
-        # 1️⃣ 字符级编码器(完全可训练)
-        # ============================================================
+        # 字符编码器
         self.char_embedding = nn.Embedding(self.vocab_size, char_embed_dim, padding_idx=0)
 
         if use_sequence_features:
@@ -59,28 +57,22 @@ class EnhancedEntityEmbedding(nn.Module):
         else:
             self.char_cnn = SimpleCharCNN(char_embed_dim, char_cnn_output_dim)
 
-        # ============================================================
-        # 2️⃣ 语义级编码器(可微调的BERT/RoBERTa)
-        # ============================================================
-        print(f"🔥 加载可微调的backbone: {backbone_model_name}")
+        # 语义编码器
+        print(f"加载可微调的backbone: {backbone_model_name}")
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(backbone_model_name)
             self.backbone = AutoModel.from_pretrained(backbone_model_name)
         except Exception as e:
-            print(f"⚠️ 加载失败: {e}")
-            print(f"💡 尝试使用本地路径或检查模型名称")
+            print(f"加载失败: {e}")
+            print(f"尝试使用本地路径或检查模型名称")
             raise
 
-        # 选择性冻结层
         self._freeze_backbone_layers(freeze_backbone_layers)
 
-        # 移动到设备
         self.backbone = self.backbone.to(device)
 
-        # ============================================================
-        # 3️⃣ 双通道融合层
-        # ============================================================
+        # 双通道融合
         self.cross_attention = BidirectionalCrossAttention(
             char_cnn_dim=char_cnn_output_dim // 3,
             backbone_dim=backbone_dim,
@@ -91,7 +83,6 @@ class EnhancedEntityEmbedding(nn.Module):
         char_feature_dim = 256 if use_bi_mcm_attn else (char_cnn_output_dim // 3) * 3
         backbone_feature_dim = 256 if use_bi_mcm_attn else backbone_dim
 
-        # 投影到统一维度
         self.char_projection = nn.Sequential(
             nn.Linear(char_feature_dim, fusion_dim),
             nn.Dropout(0.1)
@@ -102,13 +93,10 @@ class EnhancedEntityEmbedding(nn.Module):
             nn.Dropout(0.1)
         )
 
-        # 融合门控
         if fusion_method == "gate":
             self.fusion_gate = nn.Linear(fusion_dim * 2, fusion_dim)
 
-        # ============================================================
-        # 4️⃣ AECL风格的层次投影
-        # ============================================================
+        # 实例与簇投影
         self.instance_projector = nn.Sequential(
             nn.Linear(fusion_dim, fusion_dim),
             nn.ReLU(inplace=True),
@@ -135,7 +123,6 @@ class EnhancedEntityEmbedding(nn.Module):
         else:
             self.cluster_projector = None
 
-        # 🔧 确保所有层都在正确设备
         self.to(device)
 
     def _freeze_backbone_layers(self, num_freeze_layers):
@@ -146,32 +133,29 @@ class EnhancedEntityEmbedding(nn.Module):
             num_freeze_layers: 0表示全部微调，12表示全部冻结(BERT-base有12层)
         """
         if num_freeze_layers == 0:
-            print("   ✅ Backbone全部层可微调")
+            print("   Backbone全部层可微调")
             for param in self.backbone.parameters():
                 param.requires_grad = True
             return
 
         if num_freeze_layers >= 12:
-            print("   ❄️ Backbone全部层冻结")
+            print("   Backbone全部层冻结")
             for param in self.backbone.parameters():
                 param.requires_grad = False
             return
 
-        # 冻结embeddings
         for param in self.backbone.embeddings.parameters():
             param.requires_grad = False
 
-        # 冻结前N层encoder
         for i in range(num_freeze_layers):
             for param in self.backbone.encoder.layer[i].parameters():
                 param.requires_grad = False
 
-        # 后续层可训练
         for i in range(num_freeze_layers, len(self.backbone.encoder.layer)):
             for param in self.backbone.encoder.layer[i].parameters():
                 param.requires_grad = True
 
-        print(f"   ❄️ 冻结前{num_freeze_layers}层，微调后{12 - num_freeze_layers}层")
+        print(f"   冻结前{num_freeze_layers}层，微调后{12 - num_freeze_layers}层")
 
     def forward(self, entities, return_all=False):
         """
@@ -181,9 +165,6 @@ class EnhancedEntityEmbedding(nn.Module):
         """
         batch_size = len(entities)
 
-        # ============================================================
-        # 第1步: 字符级编码
-        # ============================================================
         char_indices = []
         for entity in entities:
             indices = [self.vocab.get(c, self.vocab.get('<UNK>', 1)) for c in entity]
@@ -191,11 +172,9 @@ class EnhancedEntityEmbedding(nn.Module):
 
         max_len = max(len(indices) for indices in char_indices)
 
-        # 🔧 修复：直接在正确设备上创建tensor
         char_tensor = torch.zeros((batch_size, max_len), dtype=torch.long, device=self.device)
 
         for i, indices in enumerate(char_indices):
-            # 🔧 修复：直接在正确设备上创建tensor
             char_tensor[i, :len(indices)] = torch.tensor(indices, dtype=torch.long, device=self.device)
 
         char_emb = self.char_embedding(char_tensor)  # [B, L, D_char]
@@ -205,10 +184,6 @@ class EnhancedEntityEmbedding(nn.Module):
         else:
             char_features = self.char_cnn(char_emb)  # [B, D_cnn]
 
-        # ============================================================
-        # 第2步: BERT语义编码(可微调)
-        # ============================================================
-        # Tokenize
         tokenized = self.tokenizer(
             entities,
             padding=True,
@@ -220,7 +195,6 @@ class EnhancedEntityEmbedding(nn.Module):
         input_ids = tokenized['input_ids'].to(self.device)
         attention_mask = tokenized['attention_mask'].to(self.device)
 
-        # BERT forward
         backbone_outputs = self.backbone(
             input_ids=input_ids,
             attention_mask=attention_mask
@@ -228,9 +202,6 @@ class EnhancedEntityEmbedding(nn.Module):
 
         backbone_seq = backbone_outputs.last_hidden_state  # [B, N, D_backbone]
 
-        # ============================================================
-        # 第3步: 双通道融合(可选双向交叉注意力增强)
-        # ============================================================
         if self.use_bi_mcm_attn:
             char_enhanced, backbone_enhanced = self.cross_attention(
                 char_seq, backbone_seq, char_mask, attention_mask
@@ -242,11 +213,9 @@ class EnhancedEntityEmbedding(nn.Module):
             char_proj = self.char_projection(char_features)
             backbone_proj = self.backbone_projection(backbone_emb)
 
-        # 投影后立即归一化
         char_proj = F.normalize(char_proj, p=2, dim=1)
         backbone_proj = F.normalize(backbone_proj, p=2, dim=1)
 
-        # 门控融合
         if self.fusion_method == "gate":
             gate_input = torch.cat([char_proj, backbone_proj], dim=1)
             gate = self.fusion_gate(gate_input)
@@ -257,29 +226,17 @@ class EnhancedEntityEmbedding(nn.Module):
 
         v = F.normalize(v, p=2, dim=1)
 
-        # ============================================================
-        # 第4步: Instance-level投影
-        # ============================================================
         z = self.instance_projector(v)
         z_normalized = F.normalize(z, p=2, dim=1)
 
-        # ============================================================
-        # 第5步: TransformerEncoder增强
-        # ============================================================
         h_hat, attn_weights = self.transformer_encoder(z_normalized)
         h_hat_normalized = F.normalize(h_hat, p=2, dim=1)
 
-        # ============================================================
-        # 第6步: Cluster-level投影
-        # ============================================================
         if self.cluster_projector is not None:
             c = self.cluster_projector(h_hat_normalized)
         else:
             c = None
 
-        # ============================================================
-        # 返回结果
-        # ============================================================
         if return_all:
             return {
                 'v': v,
@@ -296,14 +253,10 @@ class EnhancedEntityEmbedding(nn.Module):
             return z_normalized
 
 
-# ============================================================
-# 保留原有的辅助类
-# ============================================================
-
 class SimpleCharCNN(nn.Module):
     def __init__(self, embed_dim=128, output_dim=512, kernel_sizes=(1, 2, 3)):
         super(SimpleCharCNN, self).__init__()
-        print(f"🟠 Using SimpleCharCNN (kernels={kernel_sizes})")
+        print(f"Using SimpleCharCNN (kernels={kernel_sizes})")
         self.kernel_sizes = kernel_sizes
         self.convs = nn.ModuleList([
             nn.Conv1d(embed_dim, output_dim // len(kernel_sizes), kernel_size=k, padding=k // 2)
@@ -323,7 +276,7 @@ class SimpleCharCNN(nn.Module):
 class SequenceCharCNN(nn.Module):
     def __init__(self, embed_dim=128, output_dim=512, kernel_sizes=(1, 2, 3)):
         super(SequenceCharCNN, self).__init__()
-        print(f"🔵 Using SequenceCharCNN (dynamic kernels={kernel_sizes})")
+        print(f"Using SequenceCharCNN (dynamic kernels={kernel_sizes})")
 
         self.kernel_sizes = kernel_sizes
         self.out_per_kernel = output_dim // len(kernel_sizes)

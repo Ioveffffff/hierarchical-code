@@ -42,8 +42,7 @@ def leiden_candidates(content_vectors, name_vectors, neighbors,
                       resolutions, seeds):
     """Return complete partitions with caller-supplied dataset settings.
 
-    TODO(数据集适配): 在调用处确定邻居数、分辨率候选和随机种子；
-    本文件不公开或内置特定数据集调出的参数值。
+    调用方根据数据集提供邻居数、分辨率候选和随机种子。
     """
     content, content_pct = _similarities(content_vectors)
     names, name_pct = _similarities(name_vectors)

@@ -11,10 +11,9 @@ import torch
 
 from dual_channel_model import EnhancedEntityEmbedding
 from load_dataset import load_entities_from_csv, load_texts_from_csv
-# 原代码（第7-11行）
 from clustering_utils import (
     evaluate_clustering,
-    evaluate_clustering_comparison,        # ✅ 这个函数已经包含了所有方法
+    evaluate_clustering_comparison,
     evaluate_clustering_hierarchical_auto,
     build_coarse_labels_with_acrl,
     evaluate_clustering_acrl_kmeans
@@ -34,7 +33,6 @@ from utils.improved_hierarchy import (
     augment_entity
 )
 
-# 在文件开头添加导入
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 import matplotlib
@@ -74,17 +72,14 @@ def visualize_clustering_tsne(embeddings, labels, save_path, title="Clustering V
         max_iter: t-SNE的最大迭代次数 (注意：新版scikit-learn使用max_iter而非n_iter)
         random_state: 随机种子
     """
-    print(f"   🎨 生成: {title}")
+    print(f"   生成: {title}")
 
-    # t-SNE降维到2D
-    tsne = TSNE(n_components=2, perplexity=perplexity, max_iter=max_iter,  # 🔥 改为 max_iter
+    tsne = TSNE(n_components=2, perplexity=perplexity, max_iter=max_iter,
                 random_state=random_state, verbose=0)
     embeddings_2d = tsne.fit_transform(embeddings)
 
-    # 创建图形
     plt.figure(figsize=(12, 10), dpi=150)
 
-    # 获取唯一标签和颜色
     unique_labels = np.unique(labels)
     n_clusters = len(unique_labels)
 
@@ -96,7 +91,6 @@ def visualize_clustering_tsne(embeddings, labels, save_path, title="Clustering V
     else:
         colors = plt.cm.gist_rainbow(np.linspace(0, 1, n_clusters))
 
-    # 绘制每个类别
     for idx, label in enumerate(unique_labels):
         mask = labels == label
         plt.scatter(
@@ -114,7 +108,6 @@ def visualize_clustering_tsne(embeddings, labels, save_path, title="Clustering V
     plt.xlabel('t-SNE Dimension 1', fontsize=12)
     plt.ylabel('t-SNE Dimension 2', fontsize=12)
 
-    # 图例设置
     if n_clusters <= 15:
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left',
                    frameon=True, fontsize=10, ncol=1)
@@ -125,11 +118,10 @@ def visualize_clustering_tsne(embeddings, labels, save_path, title="Clustering V
     plt.grid(True, alpha=0.3, linestyle='--')
     plt.tight_layout()
 
-    # 保存图片
     plt.savefig(save_path, bbox_inches='tight', dpi=150)
     plt.close()
 
-    print(f"      ✅ 已保存至: {save_path}")
+    print(f"      已保存至: {save_path}")
 
     return embeddings_2d
 
@@ -201,10 +193,8 @@ def save_stage_results(stage_dir, stage_num, epoch, model, metrics, config, hist
     """
     os.makedirs(stage_dir, exist_ok=True)
 
-    # 1. 保存final模型
     final_path = save_checkpoint(stage_dir, model, epoch, metrics, config, 'final')
 
-    # 2. 如果有best模型信息,也保存best模型
     if save_best and 'best_metrics' in config:
         best_path = save_checkpoint(
             stage_dir, model,
@@ -215,22 +205,19 @@ def save_stage_results(stage_dir, stage_num, epoch, model, metrics, config, hist
         )
         print(f"   - best checkpoint: {best_path}")
 
-    # 3. 保存配置
     config_path = os.path.join(stage_dir, 'config.json')
     with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
 
-    # 4. 保存训练历史
     history_path = os.path.join(stage_dir, 'training_history.json')
     with open(history_path, 'w', encoding='utf-8') as f:
         json.dump(history, f, indent=2, ensure_ascii=False)
 
-    # 5. 保存评估结果
     metrics_path = os.path.join(stage_dir, 'final_metrics.json')
     with open(metrics_path, 'w', encoding='utf-8') as f:
         json.dump(metrics, f, indent=2, ensure_ascii=False)
 
-    print(f"💾 Stage {stage_num} 结果已保存至: {stage_dir}")
+    print(f"Stage {stage_num} 结果已保存至: {stage_dir}")
     print(f"   - final checkpoint: {final_path}")
     print(f"   - config: {config_path}")
     print(f"   - history: {history_path}")
@@ -266,9 +253,9 @@ def main():
     from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
     from clustering_utils import cluster_acc
     parser = argparse.ArgumentParser(description='Unsupervised instance BSE + pseudo-label CGCL')
-    parser.add_argument('--csv', default='/mnt/data2/pengy/Text_cluster/Chinese-datasets/motor_dataset.csv')
-    parser.add_argument('--backbone', default='/mnt/data2/pengy/chinese-roberta-wwm-ext/')
-    parser.add_argument('--device', default='cuda:5' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('--csv', required=True, help='Input CSV with text and label columns')
+    parser.add_argument('--backbone', required=True, help='Local Transformer checkpoint')
+    parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--epochs-stage1', type=int, default=0,
                         help='Optional additional instance stage after unsupervised BSE')
     parser.add_argument('--epochs-stage2', type=int, default=100)
@@ -324,7 +311,7 @@ def main():
     if args.fixed_k is not None and args.fixed_k > len(entities) // 2:
         parser.error('--fixed-k cannot exceed half the number of training texts')
     print(f"\n{'=' * 60}")
-    print(f"📊 数据集信息")
+    print(f"数据集信息")
     print(f"{'=' * 60}")
     print(f"  样本数: {len(entities)}")
     print(f"  CGCL 细簇数: {args.fixed_k if args.fixed_k is not None else '自动选择'}")
@@ -407,7 +394,6 @@ def main():
     fixed_k = args.fixed_k
     print('无监督 BSE 训练完成，开始 CGCL 伪标签训练。')
 
-    # 🔥 接收返回值
     output_dir, timestamp = train_three_stage_improved(
         model=model,
         entities=entities,
@@ -480,15 +466,13 @@ def main():
         return
     print('以下保留的多方法对比使用真实类别数，并按真实指标比较方法，仅作训练后参考。')
 
-    # ✅ 最终评估 - 使用对比模式（已经加载了Stage3的best模型）
     print(f"\n{'=' * 60}")
-    print("🎯 最终评估 - 对比多种聚类方法（使用Stage3 best模型）")
+    print("最终评估 - 对比多种聚类方法（使用Stage3 best模型）")
     print(f"{'=' * 60}\n")
 
     embeddings = extract_embeddings(model, entities, batch_size=128)
     embeddings_np = embeddings.numpy()
-    verbose = True  # ✅ 新增这一行
-    # 🔥 定义要对比的聚类方法列表
+    verbose = True
     methods = [
         'hierarchical_gap',
         'hierarchical_silhouette',
@@ -498,14 +482,10 @@ def main():
         'acrl_hierarchical_silhouette'
     ]
 
-    # ===================================================================
-    # 🔥 新增：余弦距离 vs 欧氏距离对比实验
-    # ===================================================================
     print(f"\n{'=' * 70}")
-    print("🔬 实验对比：余弦距离 vs 欧氏距离")
+    print("实验对比：余弦距离 vs 欧氏距离")
     print(f"{'=' * 70}\n")
 
-    # 1️⃣ 使用余弦距离评估（包含ACRL-KMeans）
     print("=" * 70)
     print("【实验组：余弦距离】")
     print("=" * 70)
@@ -518,7 +498,6 @@ def main():
         verbose=True
     )
 
-    # 2️⃣ 使用欧氏距离评估（对照组，也加入ACRL）
     print("\n" + "=" * 70)
     print("【对照组：欧氏距离】")
     print("=" * 70)
@@ -531,16 +510,14 @@ def main():
         verbose=True
     )
 
-    # 3️⃣ 对比分析
     print(f"\n{'=' * 70}")
-    print("📊 余弦距离 vs 欧氏距离 - 详细对比")
+    print("余弦距离 vs 欧氏距离 - 详细对比")
     print(f"{'=' * 70}")
 
-    print(f"\n📈 总体性能对比:")
+    print(f"\n总体性能对比:")
     print(f"{'指标':<15} {'余弦距离':>12} {'欧氏距离':>12} {'差异':>12} {'相对提升':>12}")
     print("-" * 70)
 
-    # ✅ 正确
     nmi_diff = comparison_cosine['overall_metrics']['NMI'] - comparison_euclidean['overall_metrics']['NMI']
     nmi_improve = (nmi_diff / comparison_euclidean['overall_metrics']['NMI']) * 100 if \
     comparison_euclidean['overall_metrics']['NMI'] > 0 else 0
@@ -563,12 +540,11 @@ def main():
         f"{'ACC':<15} {comparison_cosine['overall_metrics']['ACC']:>12.4f} {comparison_euclidean['overall_metrics']['ACC']:>12.4f} "
         f"{acc_diff:>+12.4f} {acc_improve:>+11.2f}%")
 
-    print(f"\n🔍 分方法对比:")
+    print(f"\n分方法对比:")
     print(f"{'方法':<30} {'度量':<10} {'NMI':>10} {'ACC':>10} {'ARI':>10}")
     print("-" * 70)
 
-    for method in methods:  # 🔥 使用实际的方法列表
-        # 🔥 关键修复：检查方法是否存在于两个结果中
+    for method in methods:
         if method not in comparison_cosine['method_results'] or method not in comparison_euclidean['method_results']:
             if verbose:
                 print(f"{method:<30} {'跳过':<10} {'方法未执行或失败'}")
@@ -590,50 +566,42 @@ def main():
               f"{acc_method_diff:>+10.4f} {ari_method_diff:>+10.4f}")
         print("-" * 70)
 
-    # 4️⃣ 结论性分析
-    print(f"\n💡 结论:")
+    print(f"\n结论:")
     if nmi_diff > 0.01:
-        print(f"   ✅ 余弦距离显著优于欧氏距离 (NMI提升 {nmi_diff:.4f}, +{nmi_improve:.2f}%)")
+        print(f"   余弦距离显著优于欧氏距离 (NMI提升 {nmi_diff:.4f}, +{nmi_improve:.2f}%)")
         print(f"      推荐使用余弦距离作为最终配置")
     elif nmi_diff > 0:
-        print(f"   ✅ 余弦距离略优于欧氏距离 (NMI提升 {nmi_diff:.4f}, +{nmi_improve:.2f}%)")
+        print(f"   余弦距离略优于欧氏距离 (NMI提升 {nmi_diff:.4f}, +{nmi_improve:.2f}%)")
         print(f"      余弦距离表现更好")
     elif nmi_diff > -0.01:
-        print(f"   ⚖️ 两种距离度量表现相当 (NMI差异 {nmi_diff:.4f})")
+        print(f"   两种距离度量表现相当 (NMI差异 {nmi_diff:.4f})")
         print(f"      可以根据具体场景选择")
     else:
-        print(f"   ⚠️ 欧氏距离优于余弦距离 (NMI差异 {nmi_diff:.4f})")
+        print(f"   欧氏距离优于余弦距离 (NMI差异 {nmi_diff:.4f})")
         print(f"      当前数据集可能更适合欧氏距离")
 
-    print(f"\n🎯 最佳配置: {comparison_cosine['best_method']} + {'余弦距离' if nmi_diff > 0 else '欧氏距离'}")
+    print(f"\n最佳配置: {comparison_cosine['best_method']} + {'余弦距离' if nmi_diff > 0 else '欧氏距离'}")
 
-    # ===================================================================
-    # 原有的评估代码（保留最佳结果）
-    # ===================================================================
     print(f"\n{'=' * 60}")
-    print(f"📊 Final Metrics (最佳方法: {comparison_cosine['best_method']}, 余弦距离):")
+    print(f"Final Metrics (最佳方法: {comparison_cosine['best_method']}, 余弦距离):")
     print(f"{'=' * 60}")
     print(f"  NMI: {comparison_cosine['overall_metrics']['NMI']:.4f}")
     print(f"  ARI: {comparison_cosine['overall_metrics']['ARI']:.4f}")
     print(f"  ACC: {comparison_cosine['overall_metrics']['ACC']:.4f}")
 
-    print(f"\n🔬 所有方法对比 (余弦距离):")
+    print(f"\n所有方法对比 (余弦距离):")
     for method, result in comparison_cosine['method_results'].items():
         optimal_k = result.get('optimal_k', 'N/A')
         print(f"  {method:30s} | NMI={result['NMI']:.4f} | ACC={result['ACC']:.4f} | K={optimal_k}")
 
     active_ratio, eff_rank = evaluate_feature_collapse(embeddings)
-    print(f"\n🔍 最终特征质量:")
+    print(f"\n最终特征质量:")
     print(f"  活跃维度比例: {active_ratio:.2%}")
     print(f"  有效秩比例: {eff_rank:.2%}")
 
-    # ===================================================================
-    # ✅ 保存对比结果（增强版）
-    # ===================================================================
     comparison_path = os.path.join(output_dir, 'clustering_comparison.json')
     with open(comparison_path, 'w', encoding='utf-8') as f:
         save_data = {
-            # 余弦距离结果
             'cosine_distance': {
                 'best_method': comparison_cosine['best_method'],
                 'overall_metrics': {
@@ -648,11 +616,10 @@ def main():
                         'ARI': float(result['ARI']),
                         'optimal_k': int(result.get('optimal_k', 0))
                     }
-                    for method, result in comparison_cosine['method_results'].items()  # ✅ 改为 method_results
+                    for method, result in comparison_cosine['method_results'].items()
                 }
             },
 
-            # 欧氏距离结果
             'euclidean_distance': {
                 'best_method': comparison_euclidean['best_method'],
                 'overall_metrics': {
@@ -667,11 +634,10 @@ def main():
                         'ARI': float(result['ARI']),
                         'optimal_k': int(result.get('optimal_k', 0))
                     }
-                    for method, result in comparison_euclidean['method_results'].items()  # ✅ 改为 method_results
+                    for method, result in comparison_euclidean['method_results'].items()
                 }
             },
 
-            # 对比分析
             'comparison_analysis': {
                 'nmi_difference': float(nmi_diff),
                 'nmi_improvement_percent': float(nmi_improve),
@@ -685,7 +651,6 @@ def main():
                 )
             },
 
-            # 特征质量
             'feature_quality': {
                 'active_ratio': float(active_ratio),
                 'effective_rank': float(eff_rank)
@@ -693,31 +658,24 @@ def main():
         }
         json.dump(save_data, f, indent=2, ensure_ascii=False)
 
-    print(f"\n💾 详细对比结果已保存至: {comparison_path}")
+    print(f"\n详细对比结果已保存至: {comparison_path}")
     print(f"   包含余弦距离和欧氏距离的完整对比数据")
 
-    # ===================================================================
-    # 🎨 可视化部分 - 显示每个方法各自的最佳结果
-    # ===================================================================
     print(f"\n{'=' * 70}")
-    print("🎨 生成聚类可视化（每个方法的最佳结果）")
+    print("生成聚类可视化（每个方法的最佳结果）")
     print(f"{'=' * 70}\n")
 
-    # 🔥 创建可视化输出目录
     vis_dir = os.path.join(output_dir, 'visualizations')
     os.makedirs(vis_dir, exist_ok=True)
-    print(f"📁 可视化保存目录: {vis_dir}\n")
+    print(f"可视化保存目录: {vis_dir}\n")
 
-    # 1. 真实标签的可视化
-    print("📊 [1/N] 可视化真实标签分布...")
+    print("[1/N] 可视化真实标签分布...")
     vis_path_true = os.path.join(vis_dir, f'{timestamp}_true_labels.png')
 
-    # t-SNE降维
-    print("   🔄 执行t-SNE降维...")
+    print("   执行t-SNE降维...")
     tsne = TSNE(n_components=2, perplexity=30, max_iter=1000, random_state=42, verbose=0)
     embeddings_2d = tsne.fit_transform(embeddings_np)
 
-    # 绘制真实标签
     plt.figure(figsize=(10, 8), dpi=150)
     scatter = plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1],
                           c=evaluation_labels,
@@ -733,10 +691,9 @@ def main():
     plt.tight_layout()
     plt.savefig(vis_path_true, bbox_inches='tight', dpi=150)
     plt.close()
-    print(f"      ✅ 已保存至: {vis_path_true}")
+    print(f"      已保存至: {vis_path_true}")
 
-    # 2. 为每个余弦距离方法生成可视化
-    print(f"\n📊 为每个余弦距离方法生成可视化...")
+    print(f"\n为每个余弦距离方法生成可视化...")
     cosine_vis_paths = {}
     for idx, (method, result) in enumerate(comparison_cosine['method_results'].items(), start=2):
         print(f"\n   [{idx}/{len(comparison_cosine['method_results']) + 1}] 可视化方法: {method} (余弦距离)")
@@ -768,10 +725,9 @@ def main():
         plt.tight_layout()
         plt.savefig(vis_path, bbox_inches='tight', dpi=150)
         plt.close()
-        print(f"      ✅ 已保存至: {vis_path}")
+        print(f"      已保存至: {vis_path}")
 
-    # 3. 为每个欧氏距离方法生成可视化
-    print(f"\n📊 为每个欧氏距离方法生成可视化...")
+    print(f"\n为每个欧氏距离方法生成可视化...")
     euclidean_vis_paths = {}
     for idx, (method, result) in enumerate(comparison_euclidean['method_results'].items(),
                                            start=len(comparison_cosine['method_results']) + 2):
@@ -805,12 +761,10 @@ def main():
         plt.tight_layout()
         plt.savefig(vis_path, bbox_inches='tight', dpi=150)
         plt.close()
-        print(f"      ✅ 已保存至: {vis_path}")
+        print(f"      已保存至: {vis_path}")
 
-    # 4. 找出NMI和ACC最高的方法，生成对比图
-    print(f"\n📊 生成最佳结果对比可视化...")
+    print(f"\n生成最佳结果对比可视化...")
 
-    # 找出所有方法中NMI最高的
     all_results = []
     for method, result in comparison_cosine['method_results'].items():
         all_results.append({
@@ -834,25 +788,20 @@ def main():
             'optimal_k': result.get('optimal_k', 0)
         })
 
-    # 按NMI排序
     all_results_sorted_by_nmi = sorted(all_results, key=lambda x: x['nmi'], reverse=True)
     best_nmi = all_results_sorted_by_nmi[0]
 
-    # 按ACC排序
     all_results_sorted_by_acc = sorted(all_results, key=lambda x: x['acc'], reverse=True)
     best_acc = all_results_sorted_by_acc[0]
 
-    print(f"\n   🏆 NMI最高: {best_nmi['method']} ({best_nmi['distance']}) = {best_nmi['nmi']:.4f}")
-    print(f"   🏆 ACC最高: {best_acc['method']} ({best_acc['distance']}) = {best_acc['acc']:.4f}")
+    print(f"\n   NMI最高: {best_nmi['method']} ({best_nmi['distance']}) = {best_nmi['nmi']:.4f}")
+    print(f"   ACC最高: {best_acc['method']} ({best_acc['distance']}) = {best_acc['acc']:.4f}")
 
-    # 生成对比图 - 真实标签 vs NMI最高 vs ACC最高
     comparison_vis_path = os.path.join(vis_dir, f'{timestamp}_best_comparison.png')
 
     if best_nmi['method'] == best_acc['method'] and best_nmi['distance'] == best_acc['distance']:
-        # 如果NMI和ACC最高的是同一个方法，只显示2列
         fig, axes = plt.subplots(1, 2, figsize=(18, 7), dpi=150)
 
-        # 左图：真实标签
         scatter1 = axes[0].scatter(embeddings_2d[:, 0], embeddings_2d[:, 1],
                                    c=evaluation_labels, cmap='nipy_spectral', s=20, alpha=0.7, edgecolors='none')
         axes[0].set_title('True Labels (Ground Truth)', fontsize=14, fontweight='bold')
@@ -862,7 +811,6 @@ def main():
         cbar1 = plt.colorbar(scatter1, ax=axes[0], fraction=0.046, pad=0.04)
         cbar1.set_label('Class ID', fontsize=10)
 
-        # 右图：最佳方法
         scatter2 = axes[1].scatter(embeddings_2d[:, 0], embeddings_2d[:, 1],
                                    c=best_nmi['pred_labels'], cmap='nipy_spectral', s=20, alpha=0.7, edgecolors='none')
         axes[1].set_title(f"Predicted Labels\n" ,
@@ -874,10 +822,8 @@ def main():
         cbar2.set_label('Cluster ID', fontsize=10)
 
     else:
-        # 如果不同，显示3列
         fig, axes = plt.subplots(1, 3, figsize=(24, 7), dpi=150)
 
-        # 左图：真实标签
         scatter1 = axes[0].scatter(embeddings_2d[:, 0], embeddings_2d[:, 1],
                                    c=evaluation_labels, cmap='nipy_spectral', s=20, alpha=0.7, edgecolors='none')
         axes[0].set_title('True Labels (Ground Truth)', fontsize=14, fontweight='bold')
@@ -887,7 +833,6 @@ def main():
         cbar1 = plt.colorbar(scatter1, ax=axes[0], fraction=0.046, pad=0.04)
         cbar1.set_label('Class ID', fontsize=10)
 
-        # 中图：NMI最高
         scatter2 = axes[1].scatter(embeddings_2d[:, 0], embeddings_2d[:, 1],
                                    c=best_nmi['pred_labels'], cmap='nipy_spectral', s=20, alpha=0.7, edgecolors='none')
         axes[1].set_title(f"Best NMI: {best_nmi['method']} ({best_nmi['distance']})\n" +
@@ -899,7 +844,6 @@ def main():
         cbar2 = plt.colorbar(scatter2, ax=axes[1], fraction=0.046, pad=0.04)
         cbar2.set_label('Cluster ID', fontsize=10)
 
-        # 右图：ACC最高
         scatter3 = axes[2].scatter(embeddings_2d[:, 0], embeddings_2d[:, 1],
                                    c=best_acc['pred_labels'], cmap='nipy_spectral', s=20, alpha=0.7, edgecolors='none')
         axes[2].set_title(f"Best ACC: {best_acc['method']} ({best_acc['distance']})\n" +
@@ -914,14 +858,13 @@ def main():
     plt.tight_layout()
     plt.savefig(comparison_vis_path, bbox_inches='tight', dpi=150)
     plt.close()
-    print(f"   ✅ 最佳对比可视化已保存至: {comparison_vis_path}")
+    print(f"   最佳对比可视化已保存至: {comparison_vis_path}")
 
-    # 总结
     print(f"\n{'=' * 70}")
-    print("✅ 所有可视化已生成!")
+    print("所有可视化已生成!")
     print(f"{'=' * 70}")
-    print(f"   📁 可视化目录: {vis_dir}")
-    print(f"   📁 生成的可视化文件:")
+    print(f"   可视化目录: {vis_dir}")
+    print(f"   生成的可视化文件:")
     print(f"      1. {timestamp}_true_labels.png (真实标签)")
     print(f"\n      余弦距离方法:")
     for idx, method in enumerate(comparison_cosine['method_results'].keys(), start=2):
@@ -932,13 +875,13 @@ def main():
         print(f"      {idx}. {timestamp}_euclidean_{method}.png")
     print(
         f"\n      {len(comparison_cosine['method_results']) + len(comparison_euclidean['method_results']) + 2}. {timestamp}_best_comparison.png (最佳结果对比)")
-    print(f"\n   💡 每个方法显示其自己的NMI、ACC、ARI指标")
-    print(f"   🏆 NMI最高: {best_nmi['method']} ({best_nmi['distance']}) = {best_nmi['nmi']:.4f}")
-    print(f"   🏆 ACC最高: {best_acc['method']} ({best_acc['distance']}) = {best_acc['acc']:.4f}")
+    print(f"\n   每个方法显示其自己的NMI、ACC、ARI指标")
+    print(f"   NMI最高: {best_nmi['method']} ({best_nmi['distance']}) = {best_nmi['nmi']:.4f}")
+    print(f"   ACC最高: {best_acc['method']} ({best_acc['distance']}) = {best_acc['acc']:.4f}")
     print(f"{'=' * 70}\n")
 
     print(f"\n{'='*60}")
-    print("✅ 所有流程完成!")
+    print("所有流程完成!")
     print(f"{'='*60}\n")
 
 

@@ -25,6 +25,5 @@ outputs/
 name_embedding_cache/
 **/name_embedding_cache/
 
-# Keep only the explicitly approved smoke-test dataset.
+# Local datasets
 datasets/*
-!datasets/test.csv

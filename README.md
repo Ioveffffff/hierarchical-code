@@ -3,33 +3,26 @@
 This repository contains the Python implementation of unsupervised BSE instance
 contrastive pretraining, CGCL pseudo-label training, and HCRL hierarchy building.
 
-## Quick smoke test
+## BSE and CGCL
 
-The included `datasets/test.csv` is a small execution test set. It contains a
-`label,text` header and is used for evaluation only; BSE and CGCL training read
-the text column without using labels.
-
-Install the dependencies in `requirements.txt`, install a PyTorch build that
-matches the machine's CUDA setup, then run:
+Install `requirements.txt` and a PyTorch build compatible with the target
+machine. `main_ACRL_可视化.py` trains BSE and CGCL from a CSV containing
+`label,text` or `label,text0,text1`, and a local Transformer checkpoint:
 
 ```bash
-python -B run_smoke_test.py --device cuda:0
+python main_ACRL_可视化.py --csv /path/to/dataset.csv --backbone /path/to/checkpoint
 ```
 
-To use a different local RoBERTa checkpoint:
-
-```bash
-python -B run_smoke_test.py --device cuda:0 --backbone /path/to/chinese-roberta-wwm-ext
-```
-
-The smoke test runs one BSE epoch and one epoch in each active CGCL stage. It
-does not run HCRL and is not intended to produce research metrics.
+The training stages read only the text columns. Ground-truth labels are loaded
+after training to report evaluation metrics.
 
 ## Full pipeline
 
 `run_full_baseline.py` orchestrates BSE, CGCL, and HCRL for the full dataset. It
-expects the dataset, the L1 category catalog, a local RoBERTa checkpoint, and
-the LLM API credential to be supplied outside the repository.
+expects the dataset, the L1 category catalog, a local RoBERTa checkpoint, the
+LLM API credential, and the experiment scripts under
+`伪标签可靠性与跨粒度目标分析/初始化敏感性R1-1` to be supplied separately. That script
+directory is not included in this repository.
 
 Before running HCRL on a dataset, fill the `PROMPT_*` dataset-specific values in
 `utils/hierarchical_knowledge_builder.py` and provide the Leiden settings via
@@ -37,4 +30,4 @@ Before running HCRL on a dataset, fill the `PROMPT_*` dataset-specific values in
 Do not commit API credentials, model checkpoints, generated outputs, or private
 full datasets.
 
-No license is included. Add one only after deciding how the code may be reused.
+No license is included.

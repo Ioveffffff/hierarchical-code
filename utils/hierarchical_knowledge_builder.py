@@ -18,7 +18,7 @@ from utils.hcrl_name_embeddings import ConceptNameEncoder
 from utils.hcrl_semantic_cache import SemanticReviewCache
 
 
-# TODO(数据集适配): 发布或迁移到新数据集时，填写以下领域信息与示例。
+# 发布或迁移到新数据集时，填写以下领域信息与示例。
 # 这些占位符只影响 LLM 提示词和领域特定的宽泛名称过滤，不改变聚类算法。
 # 在运行 HCRL 前，应结合数据集类别清单填写；不要让占位符直接发送给 LLM。
 PROMPT_DOMAIN = "【填写数据集领域名称】"
@@ -43,9 +43,7 @@ def _prompt_profile_signature():
     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
 
 
-# ======================================================
-# 🔹 LLM接口：生成上位概念（改进版Prompt）
-# ======================================================
+# LLM 接口：生成上位概念
 class OntologyLLM:
     def __init__(self, api_url=None, api_key=None, model_name="qwen-max", use_parallel=False, max_workers=3):
         self.api_url = api_url
@@ -55,7 +53,7 @@ class OntologyLLM:
         self.max_workers = max_workers
         self.headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"} if api_key else None
 
-        # TODO(数据集适配): 将本领域不可用的宽泛类名填入 PROMPT_OVERBROAD_NAMES。
+        # 将本领域不可用的宽泛类名填入 PROMPT_OVERBROAD_NAMES。
         self.forbidden_generic_terms = {
             "相关技术", "其他", "杂项", "未分类", *PROMPT_OVERBROAD_NAMES
         }
@@ -86,11 +84,11 @@ class OntologyLLM:
                 if r.status_code == 200:
                     return r.json()["choices"][0]["message"]["content"].strip()
                 if r.status_code not in (429, 500, 502, 503, 504):
-                    print(f"   ⚠️ LLM HTTP {r.status_code}", flush=True)
+                    print(f"   LLM HTTP {r.status_code}", flush=True)
                     return None
-                print(f"   ⚠️ LLM HTTP {r.status_code}，稍后重试", flush=True)
+                print(f"   LLM HTTP {r.status_code}，稍后重试", flush=True)
             except (requests.RequestException, KeyError, ValueError) as exc:
-                print(f"   ⚠️ LLM调用失败: {type(exc).__name__}", flush=True)
+                print(f"   LLM调用失败: {type(exc).__name__}", flush=True)
             if attempt < 2:
                 time.sleep(2 ** attempt)
         return None
@@ -102,7 +100,7 @@ class OntologyLLM:
         options = [{"label": label, "name": name}
                    for label, name in sorted(catalog.items())]
         likely = catalog_candidates(terms, representatives, catalog)
-        # TODO(数据集适配): L1 的可选类别由传入 catalog 决定，更新数据集时同步替换清单。
+        # L1 的可选类别由传入 catalog 决定，更新数据集时同步替换清单。
         prompt = (
             f"你是{PROMPT_DOMAIN}术语细分类审核员。只能从给出的类别清单中选一个编号，"
             f"不可新造名称。依据全部成员术语判断共同类别，并遵守类型规则：{PROMPT_TYPE_RULE}；"
@@ -185,7 +183,7 @@ class OntologyLLM:
 
     def _build_prompt(self, entities: List[str], layer: int):
         """Legacy naming prompt; fill the domain placeholders above before use."""
-        # TODO(数据集适配): 各层示例与抽象度应匹配当前数据集的概念体系。
+        # 各层示例与抽象度应匹配当前数据集的概念体系。
         abstraction = self._get_abstract_level(layer)
         if layer == 1:
             return (
@@ -220,7 +218,7 @@ class OntologyLLM:
 
     def _is_too_generic(self, concept: str, layer: int) -> bool:
         """
-        ✅ 改进的过度泛化判断
+        判断概念名称是否过于泛化。
         """
         # 完全匹配黑名单
         if concept in self.forbidden_generic_terms:
@@ -229,7 +227,7 @@ class OntologyLLM:
         # L0-L1层：严格检查
         if layer <= 1:
             # 禁止以这些词结尾且前面没有具体修饰
-            # TODO(数据集适配): 按领域调整过宽的名称后缀。
+            # 按领域调整过宽的名称后缀。
             bad_suffixes = ("工程", "工程学", "学", "概论", "基础")
             for suffix in bad_suffixes:
                 if concept.endswith(suffix) and len(concept) <= len(suffix) + 2:
@@ -269,7 +267,7 @@ class OntologyLLM:
 
     def extract_concept(self, entities: List[str], cid: int, layer: int) -> str:
         """
-        ✅ 改进版：更强的重试机制 + 分层检查
+        生成并校验指定层级的概念名称。
         """
         if not entities:
             return f"概念_{layer}_{cid}"
@@ -298,7 +296,7 @@ class OntologyLLM:
 
             # 检查是否过于泛化
             if self._is_too_generic(concept, layer):
-                print(f"   ⚠️ L{layer}-C{cid} 第{attempt+1}次生成过于泛化: {concept}")
+                print(f"   L{layer}-C{cid} 第{attempt+1}次生成过于泛化: {concept}")
                 # 追加更严格的提示
                 prompt += (f"\n\n【重要】上次输出\"{concept}\"过于泛化！"
                            f"请给出更具体的{PROMPT_DOMAIN}类别名称，并体现本领域的对象或属性。")
@@ -306,12 +304,12 @@ class OntologyLLM:
 
             # 检查长度
             if len(concept) < 3:
-                print(f"   ⚠️ L{layer}-C{cid} 第{attempt+1}次生成过短: {concept}")
+                print(f"   L{layer}-C{cid} 第{attempt+1}次生成过短: {concept}")
                 prompt += f"\n\n【重要】上次输出\"{concept}\"过短！请给出完整的技术术语（4-10字）。"
                 continue
 
             if len(concept) > 16:
-                print(f"   ⚠️ L{layer}-C{cid} 第{attempt+1}次生成过长: {concept}")
+                print(f"   L{layer}-C{cid} 第{attempt+1}次生成过长: {concept}")
                 prompt += (f"\n\n【重要】上次输出\"{concept}\"超过16字。"
                            "请重新给出一个完整且简洁的技术概念名称，不要截断词语。")
                 continue
@@ -319,10 +317,8 @@ class OntologyLLM:
             # 通过所有检查
             return concept
 
-        # ===================================================================
         # Fallback策略
-        # ===================================================================
-        print(f"   ⚠️ L{layer}-C{cid} 经过{self.max_retry}次重试仍失败，使用Fallback")
+        print(f"   L{layer}-C{cid} 经过{self.max_retry}次重试仍失败，使用Fallback")
         if layer == 1:
             if not saw_response:
                 raise RuntimeError(f"L1-C{cid} 未收到 LLM 响应，不能凭空命名")
@@ -342,13 +338,13 @@ class OntologyLLM:
         raw = self._call_llm(simple_prompt)
         concept = self._postprocess(raw)
         if concept and 3 <= len(concept) <= 16 and not self._is_too_generic(concept, layer):
-            print(f"   ✅ Fallback成功: {concept}")
+            print(f"   Fallback成功: {concept}")
             return concept
 
         # Fallback 2: 基于第一个样本的启发式命名
         if entities:
             head = entities[0]
-            # TODO(数据集适配): 若需领域关键词兜底，请在此按数据集填写；
+            # 若需领域关键词兜底，请在此按数据集填写；
             # 默认仅使用术语前缀，不在公开代码中保留特定领域词表。
             return f"{head[:4]}类概念"
 
@@ -380,14 +376,14 @@ class OntologyLLM:
                 try:
                     concepts[cid] = future.result()
                 except Exception as e:
-                    print(f"   ⚠️ Cluster {cid} 概念生成失败: {e}")
+                    print(f"   Cluster {cid} 概念生成失败: {e}")
                     concepts[cid] = f"概念_{layer}_{cid}"
 
         return concepts
 
     def review_parent_merge(self, children: List[Dict], layer: int) -> Dict:
         """只核查算法候选父簇能否被具体命名；不调整子簇归属。"""
-        # TODO(数据集适配): 上位类示例、不可合并反例及类型规则见文件开头的 PROMPT_*。
+        # 上位类示例、不可合并反例及类型规则见文件开头的 PROMPT_*。
         if len(children) < 2:
             return {"accepted": False, "reason": "少于两个子簇", "parent_name": ""}
 
@@ -558,10 +554,7 @@ class OntologyLLM:
         raise RuntimeError(f"上层同名 {name} 未能准确消解")
 
 
-
-# ======================================================
-# 🔹 创新点1：自适应簇代表学习模块（ACRL）
-# ======================================================
+# 自适应簇代表学习模块（ACRL）
 class AdaptiveClusterRepresentation:
     def __init__(self, alpha=0.6):
         self.alpha = alpha
@@ -603,9 +596,7 @@ class AdaptiveClusterRepresentation:
         return adaptive_center, final_weights
 
 
-# ======================================================
-# 🔹 创新点2：层次一致性正则化停止准则（HCR-Stop）
-# ======================================================
+# 层次一致性正则化停止准则（HCR-Stop）
 class HierarchicalConsistencyStop:
     def __init__(
             self,
@@ -829,7 +820,7 @@ class HierarchicalConsistencyStop:
         if self.l1_concept_count is None:
             self.l1_concept_count = max(input_count, 1)
 
-        # ---------- 1. 熵变化 ΔH ----------
+        # 1. 熵变化 ΔH
         n_i = np.bincount(inverse, weights=leaf_counts)
         p_i = n_i / leaf_counts.sum()
         H = -np.sum(p_i * np.log(p_i + 1e-10))
@@ -844,7 +835,7 @@ class HierarchicalConsistencyStop:
         delta_h_norm = float(np.clip(delta_h, 0.0, 1.0))
         self.prev_entropy = H
 
-        # ---------- 2. Silhouette ----------
+        # 2. Silhouette
         sc_sample_size = min(len(labels), 2048)
         try:
             if n_clusters > 1 and n_clusters < len(labels):
@@ -858,7 +849,7 @@ class HierarchicalConsistencyStop:
         except Exception as exc:
             raise RuntimeError(f"L{layer} 的层内 Silhouette 无法计算") from exc
 
-        # ---------- 3. PCC ----------
+        # 3. PCC
         if self.use_pcc and pcc is not None:
             pcc_raw = float(np.clip(pcc, 0.0, 1.0))
             pcc_score = pcc_raw
@@ -874,7 +865,7 @@ class HierarchicalConsistencyStop:
         if pcc is not None:
             self.prev_pcc = pcc_raw
 
-        # ---------- 4. 综合一致性分数 J ----------
+        # 4. 综合一致性分数 J
         if self.use_pcc:
             weights = {'ΔH': 0.35, 'SC': 0.25, 'PCC': 0.40}
         else:
@@ -892,31 +883,31 @@ class HierarchicalConsistencyStop:
         delta_j = 0.0 if self.prev_J is None else J - self.prev_J
         self.prev_J = J
 
-        # ---------- 5. 局部压缩率 ----------
+        # 5. 局部压缩率
         # 当前层相对于上一层的压缩率。
         # 例如 110→108，compression=0.018，说明这一层几乎没抽象。
         compression = 1.0 - (float(n_clusters) / max(float(input_count), 1.0))
         compression = float(np.clip(compression, 0.0, 1.0))
 
-        # ---------- 6. 累计压缩率（诊断，不设目标簇数） ----------
+        # 6. 累计压缩率（诊断，不设目标簇数）
         cumulative_compression = 1.0 - (
             float(n_clusters) / max(float(self.l1_concept_count), 1.0)
         )
         cumulative_compression = float(np.clip(cumulative_compression, 0.0, 1.0))
 
         print(
-            f"   🔹 input_count={input_count}, n_clusters={n_clusters}, "
+            f"   input_count={input_count}, n_clusters={n_clusters}, "
             f"compression={compression:.3f}, cumulative={cumulative_compression:.3f}"
         )
-        print(f"   🔹 ΔH={delta_h_norm:.3f}, SC={SC:.3f}, PCC={pcc_raw:.3f}, "
+        print(f"   ΔH={delta_h_norm:.3f}, SC={SC:.3f}, PCC={pcc_raw:.3f}, "
               f"单成员比例={singleton_fraction:.1%}")
         print(
-            f"   🔹 J={J:.3f} (ΔJ={delta_j:+.3f}), ΔPCC={delta_pcc:+.3f}, "
+            f"   J={J:.3f} (ΔJ={delta_j:+.3f}), ΔPCC={delta_pcc:+.3f}, "
             f"stable={self.stable_count}/{self.patience}, "
             f"no_abs={self.no_abstraction_count}/{self.patience}"
         )
 
-        # ---------- 7. 停止条件 ----------
+        # 7. 停止条件
         stop_conditions = {}
 
         if not self.use_hcr_stop:
@@ -940,10 +931,10 @@ class HierarchicalConsistencyStop:
             # Candidate comparisons and quality-decline stopping happen before
             # this accepted layer is committed; SC is not a semantic veto.
             should_stop = any(stop_conditions.values())
-            reason = (f"🛑 满足停止条件: {', '.join(stop_conditions)}"
+            reason = (f"满足停止条件: {', '.join(stop_conditions)}"
                       if should_stop else "继续聚类")
 
-        # ---------- 8. 记录历史 ----------
+        # 8. 记录历史
         self.history["entropy"].append(float(H))
         self.history["delta_h"].append(float(delta_h_norm))
         self.history["sc"].append(float(SC))
@@ -976,11 +967,9 @@ class HierarchicalConsistencyStop:
         """导出 HCR-Stop 历史记录。"""
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.history, f, ensure_ascii=False, indent=2)
-        print(f"📈 指标历史已导出: {path}")
+        print(f"指标历史已导出: {path}")
 
-# ======================================================
-# 🔹 主类：层次化知识构建器（使用层次聚类）
-# ======================================================
+# 主类：层次化知识构建器（使用层次聚类）
 class HierarchicalKnowledgeBuilder:
     """
     层次化簇代表学习模块（HCRL）：
@@ -1040,7 +1029,7 @@ class HierarchicalKnowledgeBuilder:
         if not 0.0 <= min_aggregation_coverage <= 1.0:
             raise ValueError("min_aggregation_coverage 必须在 [0, 1] 内")
         self.min_aggregation_coverage = float(min_aggregation_coverage)
-        # TODO(数据集适配): 按当前数据集诊断后传入 Leiden 参数，或用以下环境变量提供。
+        # 按当前数据集诊断后传入 Leiden 参数，或用以下环境变量提供。
         # 公开代码不内置实验调出的具体取值。列表变量使用逗号分隔。
         if leiden_neighbors is None:
             leiden_neighbors = os.getenv("HCRL_LEIDEN_NEIGHBORS")
@@ -1066,7 +1055,7 @@ class HierarchicalKnowledgeBuilder:
                 any(value <= 0 for value in self.leiden_resolutions)):
             raise ValueError("Leiden 邻居数和分辨率必须为正，候选列表不能为空")
         self.l1_category_names = dict(l1_category_names or {})
-        # TODO(数据集适配): L1 类别数由当前数据集的清单决定，不在代码中写死。
+        # L1 类别数由当前数据集的清单决定，不在代码中写死。
         if (self.l1_category_names and
                 (len(set(self.l1_category_names.values())) != len(self.l1_category_names) or
                  any(not name for name in self.l1_category_names.values()))):
@@ -1095,7 +1084,7 @@ class HierarchicalKnowledgeBuilder:
 
         os.makedirs(output_dir, exist_ok=True)
 
-        print(f"✅ 层次化知识构建器初始化完成")
+        print(f"层次化知识构建器初始化完成")
         print(f"   样本数: {len(self.entities)}")
         print(f"   初始向量维度: {self.embeddings.shape[1] if self.embeddings.ndim == 2 else 'unknown'}")
         print(f"   最大层数: {max_layers}")
@@ -1647,12 +1636,12 @@ class HierarchicalKnowledgeBuilder:
             clusters_data[new_cid] = [str(self.entities[idxs[pos]])
                                       for pos in representative_positions]
 
-        print(f"   ✅ L1叶簇构建完成")
+        print(f"   L1叶簇构建完成")
         print(f"   L1簇数: {len(unique_labels)}")
         print(f"   平均簇大小: {len(self.entities) / max(len(unique_labels), 1):.2f}")
 
         if not self.l1_category_names:
-            # TODO(数据集适配): 为当前数据集提供 L1 候选类别编号与名称清单。
+            # 为当前数据集提供 L1 候选类别编号与名称清单。
             raise ValueError("L1 受限命名需要当前数据集的类别编号与名称清单")
         signature = hashlib.sha256(json.dumps(
             {"entities": self.entities, "labels": labels.tolist(),
@@ -1953,12 +1942,10 @@ class HierarchicalKnowledgeBuilder:
         LLM概念抽象和HCR-Stop判别。
         """
         print(f"\n{'=' * 70}")
-        print("🚀 开始构建层次化知识体系（HCRL）")
+        print("开始构建层次化知识体系（HCRL）")
         print(f"{'=' * 70}")
 
-        # ===================================================================
         # 第0层：原始术语层，作为第一轮语义聚类输入
-        # ===================================================================
         print(f"\n{'=' * 70}")
         print(f"【第0层】初始化 - 原始运维术语向量")
         print(f"{'=' * 70}")
@@ -2000,10 +1987,8 @@ class HierarchicalKnowledgeBuilder:
         print(f"   L0样本节点数: {self.ontology['L0']['n_clusters']}")
         print(f"   向量维度: {self.embeddings.shape[1] if self.embeddings.ndim == 2 else 'unknown'}")
 
-        # ===================================================================
         # 第1层：直接使用 Stage3 最佳聚类标签构建细粒度叶簇 L1
         # 第2层及以上：在 L1 簇代表中心上继续抽象聚类 + LLM命名 + HCR-Stop
-        # ===================================================================
         X, names, prev_leaf_indices = self._build_l1_from_initial_labels()
         self.leiden_reference_count = len(X)
         node_examples = [self.ontology["L1"]["representative_terms"][i]
@@ -2191,13 +2176,13 @@ class HierarchicalKnowledgeBuilder:
                 for layer in range(1, last_completed_layer + 1)
             },
         }
-        print("\n📊 选定的层次评价指标:")
+        print("\n选定的层次评价指标:")
         print(f"   概念深度（不计 L0）: {last_completed_layer}")
         print("   DP: 由运行脚本使用人工参考类别计算")
         print("   ECS: 需同组至少两个 seed 的完整树，跨 seed 汇总时计算")
         self._save_results()
         print(f"\n{'=' * 70}")
-        print(f"✅ 层次化知识构建完成，概念深度 {last_completed_layer}（另有 L0 术语层）")
+        print(f"层次化知识构建完成，概念深度 {last_completed_layer}（另有 L0 术语层）")
         print(f"{'=' * 70}")
 
         return self.ontology
@@ -2230,7 +2215,7 @@ class HierarchicalKnowledgeBuilder:
         }
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(out, f, ensure_ascii=False, indent=2)
-        print(f"✅ Ontology结构已保存到 {out_path}")
+        print(f"Ontology结构已保存到 {out_path}")
 
         history_path = os.path.join(self.output_dir, "metrics_history.json")
         self.hcr_stop.export_history(history_path)
@@ -2238,7 +2223,7 @@ class HierarchicalKnowledgeBuilder:
         hierarchy_metrics_path = os.path.join(self.output_dir, "hierarchy_quality_metrics.json")
         with open(hierarchy_metrics_path, "w", encoding="utf-8") as f:
             json.dump(self.hierarchy_metrics, f, ensure_ascii=False, indent=2)
-        print(f"✅ 层次结构统计已保存到 {hierarchy_metrics_path}")
+        print(f"层次结构统计已保存到 {hierarchy_metrics_path}")
 
         tree_path = os.path.join(self.output_dir, "hierarchy_tree.txt")
         with open(tree_path, "w", encoding="utf-8") as f:
@@ -2264,7 +2249,7 @@ class HierarchicalKnowledgeBuilder:
 
                 f.write("\n")
 
-        print(f"✅ 层次树文本已保存到 {tree_path}")
+        print(f"层次树文本已保存到 {tree_path}")
 
 
 def run_hcr_stop_ablation(
@@ -2307,9 +2292,7 @@ def run_hcr_stop_ablation(
     if len(reference_labels) != len(entities):
         raise ValueError("reference_labels长度必须与entities数量一致")
 
-    # ==========================================================
     # 1. 构造固定深度扫描配置
-    # ==========================================================
     # fixed_max_layers=14 对应最终 Depth=15
     # 因此这里扫描 Depth=5~15，即 max_layers=4~14
     fixed_depths = list(range(5, fixed_max_layers + 2))
@@ -2336,9 +2319,7 @@ def run_hcr_stop_ablation(
 
     results = {}
 
-    # ==========================================================
     # 2. 逐个配置运行
-    # ==========================================================
     for method_name, cfg in configs.items():
         print(f"\n{'=' * 70}")
         print(f"运行层次深度扫描 / HCR-Stop实验: {method_name}")
@@ -2402,16 +2383,12 @@ def run_hcr_stop_ablation(
             "stop_reason": final_stop_reason
         }
 
-    # ==========================================================
     # 3. 保存 JSON
-    # ==========================================================
     summary_path = os.path.join(output_dir, "hcr_stop_ablation_summary.json")
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
-    # ==========================================================
     # 4. 保存论文表格：固定深度扫描 + HCR-Stop
-    # ==========================================================
     table_path = os.path.join(output_dir, "table_3_4_hcr_stop_ablation.md")
     with open(table_path, "w", encoding="utf-8") as f:
         f.write("| 方法设置 | Target Depth | Actual Depth | Dendrogram Purity | Inheritance Richness | Average Fan-out | Stop Reason |\n")
@@ -2428,9 +2405,7 @@ def run_hcr_stop_ablation(
                 f"{row.get('stop_reason', '')} |\n"
             )
 
-    # ==========================================================
     # 5. 额外保存一个“收益变化表”：相邻固定深度的指标增量
-    # ==========================================================
     delta_table_path = os.path.join(output_dir, "table_fixed_depth_delta.md")
 
     fixed_rows = [
@@ -2468,6 +2443,3 @@ def run_hcr_stop_ablation(
     print(f"{'=' * 70}")
 
     return results
-
-
-

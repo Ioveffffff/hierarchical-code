@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""Run the v14 pipeline: unsupervised BSE 100, CGCL 100+90, then HCRL.
-
-The dataset, 165-category name catalog, RoBERTa checkpoint, and DashScope
-credential are external inputs. This code package contains none of them.
-
-The earlier ACC/NMI values used label-supervised BSE and do not predict the
-results of this unsupervised BSE pipeline. New runs are measured afresh.
-
-Example on a GPU server:
-    export HCR_LLM_API_KEY="..."
-    python -B run_full_baseline.py \
-        --csv /path/to/motor_dataset_v14.csv \
-        --category-names /path/to/category_names_v14.csv \
-        --backbone /path/to/chinese-roberta-wwm-ext \
-        --device cuda:4
-"""
+"""Run the v14 baseline: unsupervised BSE, CGCL, and HCRL."""
 
 from __future__ import annotations
 
