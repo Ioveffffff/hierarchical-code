@@ -15,6 +15,7 @@ python main_ACRL_可视化.py --csv /path/to/dataset.csv --backbone /path/to/che
 
 The training stages read only the text columns. Ground-truth labels are loaded
 after training to report evaluation metrics.
+`datasets/test.csv` is a small example of the required `label,text` format.
 
 ## Full pipeline
 

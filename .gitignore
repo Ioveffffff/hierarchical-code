@@ -27,3 +27,4 @@ name_embedding_cache/
 
 # Local datasets
 datasets/*
+!datasets/test.csv
