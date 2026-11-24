@@ -15,7 +15,17 @@ python main_ACRL_可视化.py --csv /path/to/dataset.csv --backbone /path/to/che
 
 The training stages read only the text columns. Ground-truth labels are loaded
 after training to report evaluation metrics.
-`datasets/test.csv` is a small example of the required `label,text` format.
+
+## Datasets
+
+The CSV files in `datasets/` use UTF-8 and `label,text` columns:
+
+- `THUCNews.csv`: 10,000 Chinese news records across ten labels.
+- `motor_sample_dataset_.csv`: 28 motor terminology records across four labels.
+  This is an illustrative subset; the full enterprise dataset is not public.
+- `test.csv`: a smaller example of the same CSV format.
+
+The repository does not include the full motor dataset.
 
 ## Full pipeline
 
