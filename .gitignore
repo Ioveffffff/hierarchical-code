@@ -27,6 +27,5 @@ name_embedding_cache/
 
 # Local datasets
 datasets/*
-!datasets/test.csv
 !datasets/THUCNews.csv
 !datasets/motor_sample_dataset_.csv

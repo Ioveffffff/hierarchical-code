@@ -23,7 +23,6 @@ The CSV files in `datasets/` use UTF-8 and `label,text` columns:
 - `THUCNews.csv`: 10,000 Chinese news records across ten labels.
 - `motor_sample_dataset_.csv`: 28 motor terminology records across four labels.
   This is an illustrative subset; the full enterprise dataset is not public.
-- `test.csv`: a smaller example of the same CSV format.
 
 The repository does not include the full motor dataset.
 
